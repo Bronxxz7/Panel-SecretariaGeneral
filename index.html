@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de RD - UGEL Yauli La Oroya</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- LOGIN -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-brand">
+
+  <div class="login-logo">
+    <img src="LOGOUGELL.jpg" alt="Logo UGEL" />
+  </div>
+
+  <h1>UGEL Yauli - La Oroya</h1>
+  <p>Sistema de Control de RD</p>
+
+</div>
+
+      <form id="loginForm" class="login-form">
+        <h2>Iniciar sesión</h2>
+        <p class="login-subtitle">Accede con tu cuenta autorizada</p>
+
+        <div class="form-group">
+          <label for="loginEmail">Correo electrónico</label>
+          <input type="email" id="loginEmail" placeholder="correo@ejemplo.com" required />
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Contraseña</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required />
+        </div>
+
+        <button type="submit" class="primary-btn full-btn">Ingresar</button>
+
+        <p class="login-error" id="loginError"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div class="app-shell" id="appShell" style="display:none;">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="brand-text">
+            <h1>UGEL Yauli - La Oroya</h1>
+            <p>Sistema de Control de RD</p>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <p class="nav-label">Menú principal</p>
+
+          <button class="nav-item active" data-section="dashboard">
+            <span class="nav-icon">▣</span>
+            <span>Panel General</span>
+          </button>
+
+          <button class="nav-item" data-section="rd-ugel">
+            <span class="nav-icon">📘</span>
+            <span>RD UGEL</span>
+          </button>
+
+          <button class="nav-item" data-section="rd-expedientes">
+            <span class="nav-icon">📂</span>
+            <span>RD Expedientes</span>
+          </button>
+
+          <button class="nav-item" data-section="rd-profesores">
+            <span class="nav-icon">👨‍🏫</span>
+            <span>RD Profesores</span>
+          </button>
+
+          <button class="nav-item" data-section="prestamos">
+            <span class="nav-icon">🔄</span>
+            <span>Préstamos</span>
+          </button>
+
+          <button class="nav-item" data-section="importar">
+            <span class="nav-icon">⬆</span>
+            <span>Importar Excel</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-card">
+          <h3>Uso administrativo</h3>
+          <p>
+            Plataforma para el control institucional de Resoluciones Directorales,
+            seguimiento de préstamos de resoluciones en la UGEL y organización anual de registros.
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-btn" id="menuBtn" aria-label="Abrir menú">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          <div>
+            <h2 class="page-title">Control de RD</h2>
+            <p class="page-subtitle">
+              UGEL Yauli - La Oroya · Secretaría General
+            </p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="badge-live">Control y seguimiento total</div>
+          <div class="user-session">
+            <span id="userBox"></span>
+            <button type="button" id="logoutBtn" class="secondary-btn">Cerrar sesión</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- DASHBOARD -->
+      <section class="content-section active" id="dashboard">
+        <div class="hero-card glass-card">
+          <div class="hero-text">
+            <span class="hero-badge">Sistema institucional</span>
+            <h3>Gestión centralizada de RD y control de entrega documentaria</h3>
+            <p>
+              Sistema web de control de Resoluciones Directorales (RD), que permite organizar,
+              buscar y registrar RD por módulos y años, además de gestionar préstamos y devoluciones,
+              facilitando el trabajo administrativo e institucional.
+            </p>
+          </div>
+
+          <div class="hero-actions">
+            <button class="primary-btn go-module-btn" data-target="rd-ugel">Ir a RD UGEL</button>
+            <button class="secondary-btn go-module-btn" data-target="rd-profesores">Ir a RD Profesores</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass-card">
+            <p>Total RD UGEL</p>
+            <h4 id="statUgel">0</h4>
+            <span>Registros institucionales</span>
+          </div>
+
+          <div class="stat-card glass-card">
+            <p>Total RD Expedientes</p>
+            <h4 id="statExpedientes">0</h4>
+            <span>Expedientes organizados</span>
+          </div>
+
+          <div class="stat-card glass-card">
+            <p>Total RD Profesores</p>
+            <h4 id="statProfesores">0</h4>
+            <span>Resoluciones para entrega</span>
+          </div>
+
+          <div class="stat-card glass-card">
+            <p>Préstamos pendientes</p>
+            <h4 id="statPendientes">0</h4>
+            <span>Documentos no devueltos</span>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="dashboard-panel glass-card">
+            <div class="panel-head">
+              <h3>Recomendaciones</h3>
+            </div>
+            <div class="panel-body">
+              <ul class="summary-list">
+                <li>Se recomienda recibir una breve capacitación con un encargado para el correcto uso de la plataforma.</li>
+                <li>Todo RD o expediente prestado debe ser devuelto y registrado en el sistema para mantener actualizado el control documentario.</li>
+                <li>La entrega de expedientes se realizará únicamente a miembros de la UGEL, registrando el movimiento en el sistema.</li>
+                <li>Para la entrega de RD de docentes, se debe solicitar el DNI del docente; si no puede recogerlo personalmente, deberá presentarse una carta poder.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="dashboard-panel glass-card">
+            <div class="panel-head">
+              <h3>Accesos rápidos</h3>
+            </div>
+            <div class="panel-body quick-grid">
+              <button class="quick-card go-module-btn" data-target="rd-ugel">
+                <span>📘</span>
+                <strong>RD UGEL</strong>
+                <small>Organización institucional</small>
+              </button>
+
+              <button class="quick-card go-module-btn" data-target="rd-expedientes">
+                <span>📂</span>
+                <strong>RD Expedientes</strong>
+                <small>Control de expedientes</small>
+              </button>
+
+              <button class="quick-card go-module-btn" data-target="rd-profesores">
+                <span>👨‍🏫</span>
+                <strong>RD Profesores</strong>
+                <small>Entrega de resoluciones</small>
+              </button>
+
+              <button class="quick-card go-module-btn" data-target="importar">
+                <span>⬆</span>
+                <strong>Importar Excel</strong>
+                <small>Carga masiva a RD Profesores</small>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RD UGEL -->
+      <section class="content-section" id="rd-ugel">
+        <div class="module-header glass-card">
+          <div>
+            <span class="module-badge">Módulo principal</span>
+            <h3>RD UGEL</h3>
+            <p>Consulta y administración de resoluciones directorales institucionales.</p>
+          </div>
+          <div class="module-actions">
+            <input
+              type="text"
+              class="module-search"
+              id="search-rd-ugel"
+              placeholder="Buscar en RD UGEL..."
+            />
+            <button class="primary-btn" id="add-rd-ugel">Agregar RD</button>
+          </div>
+        </div>
+
+        <div class="year-blocks" id="ugel-year-blocks"></div>
+      </section>
+
+      <!-- RD EXPEDIENTES -->
+      <section class="content-section" id="rd-expedientes">
+        <div class="module-header glass-card">
+          <div>
+            <span class="module-badge">Módulo principal</span>
+            <h3>RD Expedientes</h3>
+            <p>Control documentario y clasificación anual de expedientes relacionados con RD.</p>
+          </div>
+          <div class="module-actions">
+            <input
+              type="text"
+              class="module-search"
+              id="search-rd-expedientes"
+              placeholder="Buscar en RD Expedientes..."
+            />
+            <button class="primary-btn" id="add-rd-expedientes">Agregar RD</button>
+          </div>
+        </div>
+
+        <div class="year-blocks" id="expedientes-year-blocks"></div>
+      </section>
+
+      <!-- RD PROFESORES -->
+      <section class="content-section" id="rd-profesores">
+        <div class="module-header glass-card rd-profesores-header">
+          <div>
+            <span class="module-badge">Módulo especializado</span>
+            <h3>RD Profesores</h3>
+            <p>
+              Registro exclusivo para resoluciones de docentes importadas desde Excel.
+              En este módulo solo se controlará el estado de entrega con dos opciones:
+              <strong>Pendiente</strong> o <strong>Recogido</strong>.
+            </p>
+          </div>
+
+          <div class="module-actions rd-profesores-actions">
+            <input
+              type="text"
+              class="module-search"
+              id="search-rd-profesores"
+              placeholder="Buscar por número, nombre o asunto..."
+            />
+            <button class="primary-btn go-module-btn" data-target="importar">
+              Importar Excel
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-card profesores-summary-card">
+          <div class="panel-head">
+            <h3>Control de entrega de RD</h3>
+          </div>
+
+          <div class="loan-legend">
+            <div><span class="dot pending"></span> Pendiente</div>
+            <div><span class="dot returned"></span> Recogido</div>
+          </div>
+
+          <p class="page-subtitle" style="margin-top: 12px;">
+            Cada registro de este módulo tendrá únicamente dos acciones:
+            marcar como <strong>Pendiente</strong> o marcar como <strong>Recogido</strong>.
+            Cuando una RD esté recogida, se mostrará solo un indicador verde de estado.
+          </p>
+        </div>
+
+        <div class="year-blocks" id="profesores-year-blocks"></div>
+      </section>
+
+      <!-- PRÉSTAMOS -->
+      <section class="content-section" id="prestamos">
+        <div class="module-header glass-card">
+          <div>
+            <span class="module-badge">Control documentario</span>
+            <h3>Préstamos de RD</h3>
+            <p>Registra salida, seguimiento y devolución de documentos institucionales.</p>
+          </div>
+        </div>
+
+        <div class="loan-layout">
+          <div class="loan-form-card glass-card">
+            <div class="panel-head">
+              <h3>Registrar préstamo</h3>
+            </div>
+
+            <form id="loanForm" class="loan-form">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="loanPerson">Nombre de quien retira</label>
+                  <input type="text" id="loanPerson" placeholder="Ej. Juan Pérez" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="loanModule">Tipo de RD</label>
+                  <select id="loanModule" required>
+                    <option value="">Seleccionar</option>
+                    <option value="RD UGEL">RD UGEL</option>
+                    <option value="RD Expedientes">RD Expedientes</option>
+                    <option value="RD Profesores">RD Profesores</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="loanYear">Año</label>
+                  <select id="loanYear" required></select>
+                </div>
+
+                <div class="form-group">
+                  <label for="loanRdNumber">Número o código RD</label>
+                  <input type="text" id="loanRdNumber" placeholder="Ej. RD-2024-015" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="loanDate">Fecha de préstamo</label>
+                  <input type="date" id="loanDate" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="loanReturnDate">Fecha prometida de devolución</label>
+                  <input type="date" id="loanReturnDate" required />
+                </div>
+
+                <div class="form-group full-width">
+                  <label for="loanNotes">Observaciones</label>
+                  <textarea id="loanNotes" rows="3" placeholder="Detalle adicional del préstamo..."></textarea>
+                </div>
+              </div>
+
+              <button type="submit" class="primary-btn full-btn">Guardar préstamo</button>
+            </form>
+          </div>
+
+          <div class="loan-summary glass-card">
+            <div class="panel-head">
+              <h3>Resumen de préstamos</h3>
+            </div>
+
+            <div class="loan-mini-stats">
+              <div class="mini-stat">
+                <span>Pendientes</span>
+                <strong id="miniPending">0</strong>
+              </div>
+              <div class="mini-stat">
+                <span>Devueltos</span>
+                <strong id="miniReturned">0</strong>
+              </div>
+              <div class="mini-stat">
+                <span>Total</span>
+                <strong id="miniTotalLoans">0</strong>
+              </div>
+            </div>
+
+            <div class="loan-legend">
+              <div><span class="dot pending"></span> Pendientes</div>
+              <div><span class="dot returned"></span> Devueltos</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="loan-tabs glass-card">
+          <button class="loan-tab active" data-loan-filter="todos">Todos</button>
+          <button class="loan-tab" data-loan-filter="prestados">RD Prestados</button>
+          <button class="loan-tab" data-loan-filter="pendientes">Pendientes</button>
+          <button class="loan-tab" data-loan-filter="devueltos">Devueltos</button>
+        </div>
+
+        <div class="loan-table-card glass-card">
+          <div class="panel-head">
+            <h3>Listado de préstamos</h3>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Responsable</th>
+                  <th>Tipo RD</th>
+                  <th>Año</th>
+                  <th>Código RD</th>
+                  <th>Fecha préstamo</th>
+                  <th>Fecha prometida</th>
+                  <th>Estado</th>
+                  <th>Fecha devolución</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="loanTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- IMPORTAR -->
+      <section class="content-section" id="importar">
+        <div class="module-header glass-card">
+          <div>
+            <span class="module-badge">Carga masiva</span>
+            <h3>Importar datos desde Excel</h3>
+            <p>
+              Sube un archivo Excel para registrar datos únicamente en
+              <strong>RD Profesores</strong>.
+              Se tomará:
+              <strong>columna A = número</strong>,
+              <strong>columna B = nombre</strong>,
+              <strong>columna C = asunto</strong>.
+            </p>
+          </div>
+        </div>
+
+        <div class="import-grid">
+          <div class="import-card glass-card">
+            <div class="panel-head">
+              <h3>Seleccionar archivo</h3>
+            </div>
+
+            <div class="import-body">
+              <label for="excelFile" class="upload-zone">
+                <div class="upload-icon">⬆</div>
+                <h4>Haz clic para seleccionar un archivo Excel</h4>
+                <p>Formatos admitidos: .xlsx, .xls</p>
+              </label>
+
+              <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
+
+              <div id="selectedFileName" class="import-note">
+                Ningún archivo seleccionado.
+              </div>
+
+              <button class="primary-btn" id="importExcelBtn" type="button">
+                Importar Excel
+              </button>
+            </div>
+          </div>
+
+          <div class="import-card glass-card">
+            <div class="panel-head">
+              <h3>Estructura esperada</h3>
+            </div>
+
+            <div class="import-body">
+              <div class="table-responsive">
+                <table class="data-table compact">
+                  <thead>
+                    <tr>
+                      <th>A</th>
+                      <th>B</th>
+                      <th>C</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>0001-2026</td>
+                      <td>PORRAS RUIZ JOSE LUIS</td>
+                      <td>ENCARGAR FUNCIONES SECRETARIA GENERAL</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="import-note">
+                Todo lo importado se guardará solo en <strong>RD Profesores</strong>,
+                y cada fila será registrada de forma independiente.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL AGREGAR RD -->
+  <div class="modal-backdrop" id="rdModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Agregar nuevo registro RD</h3>
+        <button class="modal-close" id="closeModalBtn" type="button">✕</button>
+      </div>
+
+      <form id="rdForm" class="modal-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="rdModule">Módulo</label>
+            <select id="rdModule" required>
+              <option value="">Seleccionar</option>
+              <option value="RD UGEL">RD UGEL</option>
+              <option value="RD Expedientes">RD Expedientes</option>
+              <option value="RD Profesores">RD Profesores</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="rdYear">Año</label>
+            <select id="rdYear" required></select>
+          </div>
+
+          <div class="form-group">
+            <label for="rdNumber">Número RD</label>
+            <input type="text" id="rdNumber" placeholder="Ej. RD-2026-008" required />
+          </div>
+
+          <div class="form-group">
+            <label for="rdDate">Fecha</label>
+            <input type="date" id="rdDate" required />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="rdSubject">Asunto</label>
+            <input type="text" id="rdSubject" placeholder="Detalle del asunto de la RD" required />
+          </div>
+
+          <div class="form-group">
+            <label for="rdResponsible">Responsable</label>
+            <input type="text" id="rdResponsible" placeholder="Ej. Archivo central" />
+          </div>
+
+          <div class="form-group">
+            <label for="rdStatus">Estado</label>
+            <select id="rdStatus">
+              <option value="Activo">Activo</option>
+              <option value="Archivado">Archivado</option>
+              <option value="En revisión">En revisión</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="primary-btn full-btn">Guardar RD</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAGk7mlHcP4pyG62EzcjCBFhY-z7cxZuq0",
+  authDomain: "ugel-base-de-datos.firebaseapp.com",
+  projectId: "ugel-base-de-datos",
+  storageBucket: "ugel-base-de-datos.firebasestorage.app",
+  messagingSenderId: "882587815857",
+  appId: "1:882587815857:web:f31a973c2d1162503b3790"
+};
+
+firebase.initializeApp(firebaseConfig);
+</script>
+
+<script src="script.js"></script>
+</body>
+</html>
