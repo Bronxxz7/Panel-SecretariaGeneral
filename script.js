@@ -1,4 +1,6 @@
 const auth = firebase.auth();
+const db = firebase.firestore();
+
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
 const INITIAL_VISIBLE = 15;
@@ -72,16 +74,22 @@ function setupAuth() {
       showApp(user);
 
       if (!appInitialized) {
-        initializeMainApp();
-        appInitialized = true;
-      }
+  initializeMainApp()
+    .then(() => {
+      appInitialized = true;
+    })
+    .catch((error) => {
+      console.error(error);
+      showToast("Error inicializando la aplicación.");
+    });
+}
     } else {
       showLogin();
     }
   });
 }
 
-function initializeMainApp() {
+async function initializeMainApp() {
   setupYearSelects();
   setupSidebar();
   setupNavigation();
@@ -90,10 +98,19 @@ function initializeMainApp() {
   setupModal();
   setupLoans();
   setupExcelImport();
+  setTodayByDefault();
+
+  try {
+    await loadAllRDDataFromFirestore();
+    await loadLoansFromFirestore();
+  } catch (error) {
+    console.error("Error cargando datos desde Firestore:", error);
+    showToast("No se pudieron cargar algunos datos desde Firebase.");
+  }
+
   renderAllModules();
   renderLoans();
   updateStats();
-  setTodayByDefault();
 }
 
 function getAppShell() {
@@ -817,37 +834,48 @@ function attachAddMoreEvents() {
   document
     .querySelectorAll(".add-more-btn:not(.load-more-btn):not(.load-more-prof-btn)")
     .forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const moduleName = btn.dataset.module;
-        const year = Number(btn.dataset.year);
+const year = Number(btn.dataset.year);
 
-        if (!moduleName || moduleName === "RD Profesores") return;
+if (!moduleName || moduleName === "RD Profesores") return;
 
-        ensureYearLoaded(moduleName, year);
+ensureYearLoaded(moduleName, year);
 
-        const items = getYearItems(moduleName, year);
-        const currentLength = items.length;
-        const start = currentLength + 1;
+const items = getYearItems(moduleName, year);
+const currentLength = items.length;
+const start = currentLength + 1;
 
-        for (let i = start; i < start + 5; i++) {
-          items.push({
-            id: generateId(),
-            numero: `${moduleCode(moduleName)}-${year}-${String(i).padStart(3, "0")}`,
-            asunto: `${moduleName} - Nuevo registro añadido ${i}`,
-            fecha: `${year}-${String(((i + 2) % 12) + 1).padStart(2, "0")}-${String(
-              ((i + 5) % 28) + 1
-            ).padStart(2, "0")}`,
-            responsable:
-              moduleName === "RD Expedientes" ? "Mesa de Partes" : "Secretaría General",
-            estado: "Archivado",
-          });
-        }
+try {
+  for (let i = start; i < start + 5; i++) {
+    const newItem = {
+      numero: `${moduleCode(moduleName)}-${year}-${String(i).padStart(3, "0")}`,
+      asunto: `${moduleName} - Nuevo registro añadido ${i}`,
+      fecha: `${year}-${String(((i + 2) % 12) + 1).padStart(2, "0")}-${String(
+        ((i + 5) % 28) + 1
+      ).padStart(2, "0")}`,
+      responsable:
+        moduleName === "RD Expedientes" ? "Mesa de Partes" : "Secretaría General",
+      estado: "Archivado",
+    };
 
-        rdData[moduleName][year].count = items.length;
-        saveRDData();
-        renderAllModules();
-        updateStats();
-        showToast(`Se agregaron 5 registros archivados en ${moduleName} ${year}.`);
+    const docId = await createRDRecordInFirestore(moduleName, year, newItem);
+
+    items.push({
+      id: docId,
+      ...newItem,
+    });
+  }
+
+  rdData[moduleName][year].count = items.length;
+  saveRDData();
+  renderAllModules();
+  updateStats();
+  showToast(`Se agregaron 5 registros archivados en ${moduleName} ${year}.`);
+} catch (error) {
+  console.error(error);
+  showToast("No se pudieron guardar los nuevos registros en Firebase.");
+}
       };
     });
 }
@@ -968,7 +996,7 @@ function setupModal() {
   rdForm.addEventListener("submit", (e) => {
     e.preventDefault();
 
-    requireAuthAction(() => {
+    requireAuthAction(async () => {
       const moduleName = document.getElementById("rdModule").value;
       const year = Number(document.getElementById("rdYear").value);
       const numero = document.getElementById("rdNumber").value.trim();
@@ -998,25 +1026,36 @@ function setupModal() {
         return;
       }
 
-      rdData[moduleName][year].items.unshift({
-        id: generateId(),
-        numero,
-        asunto,
-        fecha,
-        responsable,
-        estado,
-      });
+      try {
+  const newItem = {
+    numero,
+    asunto,
+    fecha,
+    responsable,
+    estado,
+  };
 
-      rdData[moduleName][year].count = rdData[moduleName][year].items.length;
+  const docId = await createRDRecordInFirestore(moduleName, year, newItem);
 
-      saveRDData();
-      renderAllModules();
-      updateStats();
-      closeRDModal();
-      rdForm.reset();
-      document.getElementById("rdYear").value = "2026";
-      document.getElementById("rdDate").value = getLocalDateISO();
-      showToast("Registro RD agregado correctamente.");
+  rdData[moduleName][year].items.unshift({
+    id: docId,
+    ...newItem,
+  });
+
+  rdData[moduleName][year].count = rdData[moduleName][year].items.length;
+
+  saveRDData();
+  renderAllModules();
+  updateStats();
+  closeRDModal();
+  rdForm.reset();
+  document.getElementById("rdYear").value = "2026";
+  document.getElementById("rdDate").value = getLocalDateISO();
+  showToast("Registro RD agregado correctamente y guardado en Firebase.");
+} catch (error) {
+  console.error(error);
+  showToast("No se pudo guardar el registro en Firebase.");
+}
     });
   });
 
@@ -1047,7 +1086,7 @@ function setupLoans() {
   loanForm.addEventListener("submit", (e) => {
     e.preventDefault();
 
-    requireAuthAction(() => {
+    requireAuthAction(async () => {
       const person = document.getElementById("loanPerson").value.trim();
       const moduleName = document.getElementById("loanModule").value;
       const year = Number(document.getElementById("loanYear").value);
@@ -1102,29 +1141,68 @@ function setupLoans() {
         rdItem.estado = "Prestado";
       }
 
-      loans.unshift({
-        id: generateId(),
-        person,
-        moduleName,
-        year,
-        rdNumber,
-        loanDate,
-        promisedReturnDate: returnDate,
-        notes,
-        status: "pendiente",
-        returnedAt: null,
-        createdAt: new Date().toISOString(),
-      });
+      const newLoan = {
+  person,
+  moduleName,
+  year,
+  rdNumber,
+  loanDate,
+  promisedReturnDate: returnDate,
+  notes,
+  status: "pendiente",
+  returnedAt: null,
+  createdAt: new Date().toISOString(),
+};
 
-      saveLoans();
-      saveRDData();
-      renderLoans();
-      renderAllModules();
-      updateStats();
-      loanForm.reset();
-      document.getElementById("loanDate").value = getLocalDateISO();
-      document.getElementById("loanYear").value = "2026";
-      showToast("Préstamo registrado correctamente.");
+try {
+
+  const loanId = await createLoanInFirestore(newLoan);
+
+  loans.unshift({
+    id: loanId,
+    ...newLoan,
+  });
+
+  if (!rdItem.id) {
+
+    const newRdId = await createRDRecordInFirestore(
+      moduleName,
+      year,
+      rdItem
+    );
+
+    rdItem.id = newRdId;
+
+  } else {
+
+    await updateRDRecordInFirestore(
+      rdItem.id,
+      moduleName,
+      year,
+      rdItem
+    );
+
+  }
+
+  saveLoans();
+  saveRDData();
+
+  renderLoans();
+  renderAllModules();
+  updateStats();
+
+  loanForm.reset();
+  document.getElementById("loanDate").value = getLocalDateISO();
+  document.getElementById("loanYear").value = "2026";
+
+  showToast("Préstamo registrado correctamente y guardado en Firebase.");
+
+} catch (error) {
+
+  console.error(error);
+  showToast("No se pudo guardar el préstamo en Firebase.");
+
+}
     });
   });
 
@@ -1222,7 +1300,8 @@ function renderLoans() {
 }
 
 function markAsReturned(id) {
-  requireAuthAction(() => {
+  requireAuthAction(async () => {
+
     const loan = loans.find((item) => item.id === id);
     if (!loan) return;
 
@@ -1235,17 +1314,43 @@ function markAsReturned(id) {
 
     ensureYearLoaded(moduleName, year);
 
-    const rdItem = rdData[moduleName][year].items.find((item) => item.numero === rdNumber);
+    const rdItem = rdData[moduleName][year].items.find(
+      (item) => item.numero === rdNumber
+    );
+
     if (rdItem) {
       rdItem.estado = "Archivado";
     }
 
-    saveLoans();
-    saveRDData();
-    renderLoans();
-    renderAllModules();
-    updateStats();
-    showToast("Devolución registrada con fecha y hora exacta.");
+    try {
+
+      await updateLoanInFirestore(loan.id, loan);
+
+      if (rdItem?.id) {
+        await updateRDRecordInFirestore(
+          rdItem.id,
+          moduleName,
+          year,
+          rdItem
+        );
+      }
+
+      saveLoans();
+      saveRDData();
+
+      renderLoans();
+      renderAllModules();
+      updateStats();
+
+      showToast("Devolución registrada con fecha y hora exacta.");
+
+    } catch (error) {
+
+      console.error(error);
+      showToast("No se pudo guardar la devolución en Firebase.");
+
+    }
+
   });
 }
 
@@ -1282,7 +1387,7 @@ function applyLoanStatusesToRecords(moduleName, year, records) {
 
 /* ========================= RD PROFESORES - ESTADOS ========================= */
 function updateProfessorStatus(id, sheetName, newStatus) {
-  requireAuthAction(() => {
+  requireAuthAction(async () => {
     const items = rdData["RD Profesores"][sheetName]?.items || [];
     const item = items.find((row) => row.id === id);
     if (!item) return;
@@ -1290,14 +1395,20 @@ function updateProfessorStatus(id, sheetName, newStatus) {
     item.estado = normalizeProfessorStatus(newStatus);
     rdData["RD Profesores"][sheetName].count = items.length;
 
-    saveRDData();
-    renderProfessorsModule(getSearchValueByModule("RD Profesores"));
-    updateStats();
+    try {
+      await updateRDRecordInFirestore(id, "RD Profesores", sheetName, item);
+      saveRDData();
+      renderProfessorsModule(getSearchValueByModule("RD Profesores"));
+      updateStats();
 
-    if (item.estado === "Recogido") {
-      showToast("Registro marcado como recogido.");
-    } else {
-      showToast("Registro marcado como pendiente.");
+      if (item.estado === "Recogido") {
+        showToast("Registro marcado como recogido.");
+      } else {
+        showToast("Registro marcado como pendiente.");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("No se pudo guardar el cambio en Firebase.");
     }
   });
 }
@@ -1320,7 +1431,7 @@ function setupExcelImport() {
   });
 
   importBtn.addEventListener("click", () => {
-    requireAuthAction(() => {
+    requireAuthAction(async () => {
       const file = fileInput.files?.[0];
 
       if (!file) {
@@ -1338,7 +1449,7 @@ function setupExcelImport() {
 function importExcel(file) {
   const reader = new FileReader();
 
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
@@ -1360,6 +1471,7 @@ function importExcel(file) {
         rdData["RD Profesores"][sheetName].count = 0;
       });
 
+      await deleteProfessorRecordsFromFirestore();
       workbook.SheetNames.forEach((rawSheetName) => {
         const normalizedSheetName = normalizeProfessorSheetName(rawSheetName);
         if (!normalizedSheetName) return;
@@ -1532,14 +1644,14 @@ function escapeHTML(value) {
 }
 
 /* ========================= SEGURIDAD BÁSICA DE VISTA ========================= */
-function requireAuthAction(callback) {
+async function requireAuthAction(callback) {
   if (!auth.currentUser) {
     showLogin();
     showLoginError("Debes iniciar sesión para continuar.");
     return;
   }
 
-  callback();
+  await callback();
 }
 
 /* ========================= EVENTOS GLOBALES ========================= */
@@ -1591,8 +1703,337 @@ document.addEventListener("click", function (e) {
   }
 });
 
+/* ========================= FIRESTORE - HELPERS ========================= */
+function normalizeGroupKey(value) {
+  return String(value || "").trim();
+}
+
+function isProfessorModule(moduleName) {
+  return moduleName === "RD Profesores";
+}
+
+function buildRDRecordPayload(moduleName, groupKey, item) {
+  return {
+    moduleName: String(moduleName || "").trim(),
+    groupKey: normalizeGroupKey(groupKey),
+    numero: String(item?.numero || "").trim(),
+    asunto: String(item?.asunto || "").trim(),
+    fecha: String(item?.fecha || "").trim(),
+    responsable: String(item?.responsable || "").trim(),
+    estado: isProfessorModule(moduleName)
+      ? normalizeProfessorStatus(item?.estado || "Pendiente")
+      : normalizeGenericStatus(item?.estado || "Archivado"),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
+async function createRDRecordInFirestore(moduleName, groupKey, item) {
+  const payload = buildRDRecordPayload(moduleName, groupKey, item);
+  payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+
+  const ref = await db.collection("rd_records").add(payload);
+  return ref.id;
+}
+
+async function updateRDRecordInFirestore(docId, moduleName, groupKey, item) {
+  const payload = buildRDRecordPayload(moduleName, groupKey, item);
+  await db.collection("rd_records").doc(docId).set(payload, { merge: true });
+}
+
+async function deleteRDRecordInFirestore(docId) {
+  await db.collection("rd_records").doc(docId).delete();
+}
+
+async function loadAllRDDataFromFirestore() {
+  const snapshot = await db.collection("rd_records").get();
+
+  if (snapshot.empty) {
+    console.warn("Firestore vacío. Se conservarán los datos locales si existen.");
+    return;
+  }
+
+  MODULES.forEach((moduleName) => {
+    if (!rdData[moduleName]) rdData[moduleName] = {};
+
+    if (moduleName === "RD Profesores") {
+      PROFESSOR_SHEETS.forEach((sheet) => {
+        rdData[moduleName][sheet] = {
+          loaded: true,
+          count: 0,
+          items: [],
+        };
+      });
+    } else {
+      YEARS.forEach((year) => {
+        rdData[moduleName][year] = {
+          loaded: true,
+          count: 0,
+          items: [],
+        };
+      });
+    }
+  });
+
+  snapshot.forEach((doc) => {
+    const data = doc.data() || {};
+    const moduleName = data.moduleName;
+    const groupKeyRaw = data.groupKey;
+    const docId = doc.id;
+
+    if (!MODULES.includes(moduleName)) return;
+
+    const groupKey =
+      moduleName === "RD Profesores"
+        ? String(groupKeyRaw || "").trim()
+        : Number(groupKeyRaw);
+
+    if (!rdData[moduleName][groupKey]) return;
+
+    const itemBase = {
+      id: docId,
+      numero: String(data.numero || "").trim(),
+      asunto: String(data.asunto || "").trim(),
+      fecha: String(data.fecha || "").trim(),
+      responsable: String(data.responsable || "").trim(),
+      estado: String(data.estado || "").trim(),
+    };
+
+    const item =
+      moduleName === "RD Profesores"
+        ? normalizeProfessorRecord(itemBase)
+        : normalizeGenericRecord(itemBase);
+
+    rdData[moduleName][groupKey].items.push(item);
+  });
+
+  MODULES.forEach((moduleName) => {
+    if (moduleName === "RD Profesores") {
+      PROFESSOR_SHEETS.forEach((sheet) => {
+        rdData[moduleName][sheet].count = rdData[moduleName][sheet].items.length;
+      });
+    } else {
+      YEARS.forEach((year) => {
+        rdData[moduleName][year].count = rdData[moduleName][year].items.length;
+      });
+    }
+  });
+
+  saveRDData();
+}
+
+async function createLoanInFirestore(loan) {
+  const payload = {
+    person: String(loan.person || "").trim(),
+    moduleName: String(loan.moduleName || "").trim(),
+    year: Number(loan.year) || 0,
+    rdNumber: String(loan.rdNumber || "").trim(),
+    loanDate: String(loan.loanDate || "").trim(),
+    promisedReturnDate: String(loan.promisedReturnDate || "").trim(),
+    notes: String(loan.notes || "").trim(),
+    status: loan.status === "devuelto" ? "devuelto" : "pendiente",
+    returnedAt: loan.returnedAt || null,
+    createdAt: loan.createdAt || new Date().toISOString(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const ref = await db.collection("loans").add(payload);
+  return ref.id;
+}
+
+async function updateLoanInFirestore(docId, loan) {
+  const payload = {
+    person: String(loan.person || "").trim(),
+    moduleName: String(loan.moduleName || "").trim(),
+    year: Number(loan.year) || 0,
+    rdNumber: String(loan.rdNumber || "").trim(),
+    loanDate: String(loan.loanDate || "").trim(),
+    promisedReturnDate: String(loan.promisedReturnDate || "").trim(),
+    notes: String(loan.notes || "").trim(),
+    status: loan.status === "devuelto" ? "devuelto" : "pendiente",
+    returnedAt: loan.returnedAt || null,
+    createdAt: loan.createdAt || new Date().toISOString(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await db.collection("loans").doc(docId).set(payload, { merge: true });
+}
+
+async function loadLoansFromFirestore() {
+  const snapshot = await db.collection("loans").get();
+
+  loans.length = 0;
+
+  snapshot.forEach((doc) => {
+    const data = doc.data() || {};
+
+    loans.push({
+      id: doc.id,
+      person: String(data.person || "").trim(),
+      moduleName: String(data.moduleName || "").trim(),
+      year: Number(data.year) || 0,
+      rdNumber: String(data.rdNumber || "").trim(),
+      loanDate: String(data.loanDate || "").trim(),
+      promisedReturnDate: String(data.promisedReturnDate || "").trim(),
+      notes: String(data.notes || "").trim(),
+      status: data.status === "devuelto" ? "devuelto" : "pendiente",
+      returnedAt: data.returnedAt || null,
+      createdAt: data.createdAt || null,
+    });
+  });
+
+  saveLoans();
+}
+
 /* ========================= INICIO ========================= */
 document.addEventListener("DOMContentLoaded", () => {
   showLogin();
   setupAuth();
 });
+
+function importExcel(file) {
+  const reader = new FileReader();
+
+  reader.onload = async function (e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+
+      let importedCount = 0;
+      let duplicateCount = 0;
+      let skippedCount = 0;
+
+      // Limpiar memoria local de RD Profesores
+      PROFESSOR_SHEETS.forEach((sheetName) => {
+        if (!rdData["RD Profesores"][sheetName]) {
+          rdData["RD Profesores"][sheetName] = {
+            loaded: true,
+            count: 0,
+            items: [],
+          };
+        }
+
+        rdData["RD Profesores"][sheetName].items = [];
+        rdData["RD Profesores"][sheetName].count = 0;
+      });
+
+      // Borrar también en Firebase los registros anteriores
+      await deleteProfessorRecordsFromFirestore();
+
+      for (const rawSheetName of workbook.SheetNames) {
+        const normalizedSheetName = normalizeProfessorSheetName(rawSheetName);
+        if (!normalizedSheetName) continue;
+
+        const worksheet = workbook.Sheets[rawSheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+        if (!rows || rows.length === 0) continue;
+
+        for (const row of rows) {
+          const numero = String(row[0] || "").trim();
+          const nombre = String(row[1] || "").trim();
+          const asunto = String(row[2] || "").trim();
+
+          if (!numero && !nombre && !asunto) {
+            skippedCount++;
+            continue;
+          }
+
+          if (isHeaderLikeRow(numero, nombre, asunto)) {
+            skippedCount++;
+            continue;
+          }
+
+          if (!numero) {
+            skippedCount++;
+            continue;
+          }
+
+          const exists = rdData["RD Profesores"][normalizedSheetName].items.some(
+            (item) => item.numero.trim().toLowerCase() === numero.trim().toLowerCase()
+          );
+
+          if (exists) {
+            duplicateCount++;
+            continue;
+          }
+
+          const newItem = {
+            numero,
+            asunto: asunto || "Sin asunto",
+            fecha: "",
+            responsable: nombre || "No especificado",
+            estado: "Pendiente",
+          };
+
+          const docId = await createRDRecordInFirestore(
+            "RD Profesores",
+            normalizedSheetName,
+            newItem
+          );
+
+          rdData["RD Profesores"][normalizedSheetName].items.push({
+            id: docId,
+            ...newItem,
+          });
+
+          importedCount++;
+        }
+
+        rdData["RD Profesores"][normalizedSheetName].count =
+          rdData["RD Profesores"][normalizedSheetName].items.length;
+      }
+
+      saveRDData();
+      renderProfessorsModule(getSearchValueByModule("RD Profesores"));
+      updateStats();
+      goToSection("rd-profesores");
+
+      showToast(
+        `Importación completada y guardada en Firebase. Importados: ${importedCount}. Duplicados: ${duplicateCount}. Omitidos: ${skippedCount}.`
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("Ocurrió un error al leer o guardar el Excel en Firebase.");
+    }
+  };
+
+  reader.onerror = function () {
+    showToast("No se pudo leer el archivo seleccionado.");
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+
+async function migrateLocalDataToFirestore() {
+  try {
+    for (const moduleName of MODULES) {
+      if (moduleName === "RD Profesores") {
+        for (const sheetName of PROFESSOR_SHEETS) {
+          const items = rdData[moduleName]?.[sheetName]?.items || [];
+
+          for (const item of items) {
+            await createRDRecordInFirestore(moduleName, sheetName, item);
+          }
+        }
+      } else {
+        for (const year of YEARS) {
+          const items = rdData[moduleName]?.[year]?.items || [];
+
+          for (const item of items) {
+            await createRDRecordInFirestore(moduleName, year, item);
+          }
+        }
+      }
+    }
+
+    for (const loan of loans) {
+      await createLoanInFirestore(loan);
+    }
+
+    showToast("Migración a Firebase completada.");
+  } catch (error) {
+    console.error("Error migrando datos locales a Firebase:", error);
+    showToast("No se pudo migrar la data local a Firebase.");
+  }
+}
