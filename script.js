@@ -2037,3 +2037,25 @@ async function migrateLocalDataToFirestore() {
     showToast("No se pudo migrar la data local a Firebase.");
   }
 }
+
+
+
+
+
+
+
+
+async function deleteProfessorRecordsFromFirestore() {
+  const snapshot = await db
+    .collection("rd_records")
+    .where("moduleName", "==", "RD Profesores")
+    .get();
+
+  const batch = db.batch();
+
+  snapshot.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+
+  await batch.commit();
+}
