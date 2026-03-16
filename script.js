@@ -24,7 +24,7 @@ const STORAGE_KEYS = {
  
 let currentLoanFilter = "todos";
 let appInitialized = false;
-    
+
 /* ========================= AUTH ========================= */
 function setupAuth() {
   const loginForm = document.getElementById("loginForm");
@@ -1072,21 +1072,23 @@ function importExcel(file) {
         if (!normalizedSheetName) continue;
  
         const worksheet = workbook.Sheets[rawSheetName];
-        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+        const rows = XLSX.utils.sheet_to_json(worksheet);
         if (!rows || rows.length === 0) continue;
  
         for (const row of rows) {
-          const numero = String(row[0] || "").trim();
-          const nombre = String(row[1] || "").trim();
-          const asunto = String(row[2] || "").trim();
+          const numero = row.numero;
+          const nombre = row.nombre;
+          const asunto = row.asunto;
  
           if (!numero && !nombre && !asunto) { skippedCount++; continue; }
           if (isHeaderLikeRow(numero, nombre, asunto)) { skippedCount++; continue; }
           if (!numero) { skippedCount++; continue; }
  
           const exists = rdData["RD Profesores"][normalizedSheetName].items.some(
-            (item) => item.numero.trim().toLowerCase() === numero.trim().toLowerCase()
-          );
+  (item) =>
+    item.numero.trim().toLowerCase() === numero.trim().toLowerCase() &&
+    item.responsable.trim().toLowerCase() === nombre.trim().toLowerCase()
+);
           if (exists) { duplicateCount++; continue; }
  
           const newItem = {
